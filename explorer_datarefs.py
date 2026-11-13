@@ -1,51 +1,28 @@
 import requests
 import time
 import csv
+from pathlib import Path
 
 url = "http://localhost:8086/api/v3/datarefs"
 
-response = requests.get(url)
+session = requests.Session() # Délai de requete réduit de 2s à 0,02s en utilisant une session persistante pour les requêtes HTTP
+
+response = session.get(url)
 response.raise_for_status() #Cette méthode déclenche une exception HTTP si le serveur répond avec un code d'erreur, par exemple 404 Not Found
 donnees = response.json()
 
-"""
-for key in donnees:
-    print(key) #data uniquement
-
-print(type(donnees["data"]))
-print(len(donnees["data"]))
-print(donnees["data"][0])
-
-for dataref in donnees["data"]:
-    if "airspeed" in dataref["name"]:
-        print(dataref["name"]) #Trouver liste de datarefs reliés à la vitesse
-"""
-
-"""
-ias_dataref = {}
-
-for dataref in donnees["data"]:
-    if dataref["name"] == "sim/cockpit2/gauges/indicators/airspeed_kts_pilot":
-        ias_dataref = dataref
-
-ias_id = ias_dataref["id"]
-ias_url = f"http://localhost:8086/api/v3/datarefs/{ias_id}/value"
-
-while True:
-    response_ias = requests.get(ias_url)
-    response_ias.raise_for_status()
-    donnees_ias = response_ias.json()
-
-    ias = donnees_ias['data']  # Récupère la valeur de l'IAS à partir de la réponse JSON
-    print(f"IAS: {ias:.2f} kts")  # Affiche la valeur de l'IAS avec deux décimales
-
-    time.sleep(1)  # Attendre 1 seconde avant la prochaine requête
-"""
-
 datarefs_voulues = {
     "ias": "sim/cockpit2/gauges/indicators/airspeed_kts_pilot",
+    "altitude": "sim/cockpit2/gauges/indicators/altitude_ft_pilot",
+    "radio_alt": "sim/cockpit2/gauges/indicators/radio_altimeter_height_ft_pilot",
     "vs": "sim/cockpit2/gauges/indicators/vvi_fpm_pilot",
-    "altitude": "sim/cockpit2/gauges/indicators/altitude_ft_pilot"
+    "pitch": "sim/flightmodel/position/theta",
+    "bank": "sim/flightmodel/position/phi",
+    "rudder": "sim/flightmodel2/wing/rudder1_deg",
+    "throttle": "sim/cockpit2/engine/actuators/throttle_ratio",
+    "flaps": "sim/cockpit2/controls/flap_system_deploy_ratio",
+    "speedbrake": "sim/cockpit2/controls/speedbrake_ratio",
+    "gear": "sim/flightmodel2/gear/deploy_ratio"
 }
 
 datarefs_ids = {}
@@ -57,26 +34,53 @@ for variable, description in datarefs_voulues.items():
 
 def lire_dataref(dataref_id):
     url = f"http://localhost:8086/api/v3/datarefs/{dataref_id}/value"
-    response = requests.get(url)
+    response = session.get(url)
     response.raise_for_status()
     donnees = response.json() #dictionnaire avec clé 'data' associée à la valeur de la dataref
     return donnees['data']
 
-with open("telemetrie.csv", "w", newline="", encoding = "utf-8") as f:
+def etat_train(gear):
+    if gear[0] == 1.0 and gear[1] == 1.0 and gear[2] == 1.0:
+        return "DOWN"
+    elif gear[0] == 0.0 and gear[1] == 0.0 and gear[2] == 0.0:
+        return "UP"
+    else:
+        return "TRANSIT"
+
+numero = 1
+nom_fichier = f"telemetrie_{numero:03d}.csv" # Exemple de nom de fichier : telemetrie_001.csv
+
+while Path(nom_fichier).exists(): # Vérifie si le fichier existe déjà et incrémente le numéro jusqu'à trouver un nom de fichier unique
+    numero += 1
+    nom_fichier = f"telemetrie_{numero:03d}.csv"
+
+with open(nom_fichier, "w", newline="", encoding = "utf-8") as f:
     writer = csv.writer(f)
-    writer.writerow(["time_s","ias_kts", "vs_fpm", "altitude_ft"])  # Écrire l'en-tête du fichier CSV
+    writer.writerow(["time_s","ias_kts", "altitude_ft", "radio_alt_ft", "vs_fpm", "pitch", "bank", "rudder", "throttle_1", "throttle_2", "flaps", "speedbrake", "gear"])  # Écrire l'en-tête du fichier CSV
 
     debut = time.monotonic()  # Enregistre le temps de début pour calculer la durée d'exécution
 
     while True:
+        debut_iteration = time.monotonic()  # Enregistre le temps de début de l'itération pour calculer le temps écoulé
+
         ias = lire_dataref(datarefs_ids["ias"])
         vs = lire_dataref(datarefs_ids["vs"])
         altitude = lire_dataref(datarefs_ids["altitude"])
+        radio_alt = lire_dataref(datarefs_ids["radio_alt"])
+        pitch = lire_dataref(datarefs_ids["pitch"])
+        bank = lire_dataref(datarefs_ids["bank"])
+        flaps = lire_dataref(datarefs_ids["flaps"])
+        throttle = lire_dataref(datarefs_ids["throttle"])
+        throttle_1 = throttle[0]
+        throttle_2 = throttle[1]
+        speedbrake = lire_dataref(datarefs_ids["speedbrake"])
+        gear = etat_train(lire_dataref(datarefs_ids["gear"]))
+        rudder = lire_dataref(datarefs_ids["rudder"])[10]
 
         temps_ecoule = time.monotonic() - debut  # Calcule le temps écoulé depuis le début de l'exécution
 
-        writer.writerow([temps_ecoule, ias, vs, altitude])  # Écrire les valeurs dans le fichier CSV
+        writer.writerow([temps_ecoule, ias, altitude, radio_alt, vs, pitch, bank, rudder, throttle_1, throttle_2, flaps, speedbrake, gear])  # Écrire les valeurs dans le fichier CSV
 
         f.flush()  # S'assure que les données sont écrites immédiatement dans le fichier
 
-        time.sleep(1)  # Attendre 1 seconde avant la prochaine requête
+        time.sleep(max(0, 1 - (time.monotonic() - debut_iteration))) # Ajuste le temps de sommeil pour maintenir un intervalle d'une seconde
