@@ -1,0 +1,51 @@
+{
+    "cible": "vs_future_10s",
+    "features": [
+        "ias_kts",
+        "altitude_ft",
+        "vs_fpm",
+        "pitch",
+        "throttle_1",
+        "delta_vs_3s",
+        "delta_pitch_3s",
+        "gear_DOWN",
+        "gear_TRANSIT",
+        "gear_UP"
+    ],
+    "categories_gear": [
+        "DOWN",
+        "TRANSIT",
+        "UP"
+    ],
+    "mae_ft_min": 117.20838347550863,
+    "intervalles": {
+        "ias_kts": {
+            "min": -4.207336902618408,
+            "max": 242.4825439453125
+        },
+        "altitude_ft": {
+            "min": 134.41403198242188,
+            "max": 13013.0087890625
+        },
+        "vs_fpm": {
+            "min": -2485.656494140625,
+            "max": 5191.90576171875
+        },
+        "pitch": {
+            "min": -9.713223457336426,
+            "max": 19.69118881225586
+        },
+        "throttle_1": {
+            "min": 0.24209964275360107,
+            "max": 1.0
+        },
+        "delta_vs_3s": {
+            "min": -1629.483642578125,
+            "max": 1493.3156433105469
+        },
+        "delta_pitch_3s": {
+            "min": -7.500149250030518,
+            "max": 7.78706967830658
+        }
+    }
+}
